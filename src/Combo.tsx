@@ -1,4 +1,4 @@
-import { Constants, Warnings } from './Constants';
+import { Constants } from './Constants';
 import { Action, ActionData } from './ActionData';
 import Timer from './Timer';
 
@@ -24,9 +24,9 @@ export default class Combo extends Timer {
    * @param context The action causing the combo to change.
    */
   activate(nextAction: Action, context?: ActionData): void {
-    if (context && this.#nextAction !== context.parent) {
-      context.warnings.push(Warnings.COMBO_BROKEN);
-    }
+    // if (context && this.#nextAction !== context.parent) {
+    //   context.warnings.push(Warnings.COMBO_BROKEN);
+    // }
 
     if (nextAction === this.neutralAction) {
       this.reset(context);
