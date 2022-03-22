@@ -3,96 +3,45 @@
 
 import Combo from './Combo';
 import Gauge from './Gauge';
-import Timer from './Timer';
-import { Action, ActionData } from './ActionData';
+import { ActionData } from './ActionData';
 import { Constants, Warnings } from './Constants';
 import StatusEffect from './StatusEffect';
+import { Player, PlayerState } from './Player';
 
-type BaseState = {
-  gcd: Timer;
-  actionLock: Timer;
-};
-
-type ReaperState = BaseState & {
+/**
+ * The values of a reaper state. Used for memoizing in simulation.
+ */
+export interface ReaperState extends PlayerState {
   totalPotency: Gauge;
   soulGauge: Gauge;
   shroudGauge: Gauge;
   combo: Combo;
   deathsDesign: StatusEffect;
-};
-
-class Player {
-  clock: number = 0;
-  state: BaseState = {
-    gcd: new Timer(0),
-    actionLock: new Timer(0, Constants.ACTION_RECAST_LOCK),
-  };
 }
 
-export default class Reaper extends Player {
+export class Reaper extends Player implements ReaperState {
   static Warnings = {
     DEATHS_DESIGN_EXPIRED: "Death's design expired",
   };
 
-  declare state: ReaperState;
+  totalPotency: Gauge;
+  soulGauge: Gauge;
+  shroudGauge: Gauge;
+  combo: Combo;
+  deathsDesign: StatusEffect;
 
   constructor() {
     super();
-
-    this.state.totalPotency = new Gauge();
-    this.state.soulGauge = new Gauge(0, 0, 20);
-    this.state.shroudGauge = new Gauge(0, 0, 100);
-    this.state.combo = new Combo(this.slice, this.expireCombo);
-    this.state.deathsDesign = new StatusEffect(
+    this.totalPotency = new Gauge();
+    this.soulGauge = new Gauge(0, 0, 20);
+    this.shroudGauge = new Gauge(0, 0, 100);
+    this.combo = new Combo(this.slice, this.expireCombo);
+    this.deathsDesign = new StatusEffect(
       Reaper.deathsDesignMutator,
       0,
       60,
       this.expireDeathsDesign
     );
-
-    console.table(this.state);
-  }
-
-  stepTime(delta: number) {
-    this.clock += delta;
-    Object.values(this.state).forEach((status) => {
-      if (status instanceof Timer) {
-        status.increment(-delta);
-      }
-    });
-  }
-
-  getNextExpireAction() {
-    let nextExpire: { delta: number; action: Action } | undefined;
-    Object.values(this.state).forEach((status) => {
-      if (
-        status instanceof Timer &&
-        status.isActive() &&
-        status.expire &&
-        (nextExpire === undefined || status.value < nextExpire.delta)
-      ) {
-        nextExpire = {
-          delta: status.value,
-          action: status.expire,
-        };
-      }
-    });
-
-    return nextExpire;
-  }
-
-  execute(action: Action): ActionData {
-    const actionData = action.call(this);
-    actionData.beginEffects();
-
-    Object.values(this.state).forEach((status) => {
-      if (status instanceof StatusEffect && status.isActive()) {
-        status.alterData(actionData);
-      }
-    });
-
-    actionData.finishEffects();
-    return actionData;
   }
 
   expireCombo(): ActionData {
@@ -101,7 +50,7 @@ export default class Reaper extends Player {
       warnings: [Warnings.COMBO_EXPIRED],
       beginEffects: () => {},
       finishEffects: () => {
-        this.state.combo.reset(action);
+        this.combo.reset(action);
       },
     };
     return action;
@@ -126,7 +75,7 @@ export default class Reaper extends Player {
   }
 
   slice(): ActionData {
-    const isComboed = this.state.combo.nextAction === this.slice;
+    const isComboed = this.combo.nextAction === this.slice;
 
     const actionData: ActionData = {
       type: 'gcd',
@@ -135,17 +84,17 @@ export default class Reaper extends Player {
       warnings: [],
       beginEffects: () => {},
       finishEffects: () => {
-        this.state.totalPotency.increment(actionData.potency!, actionData);
-        this.state.soulGauge.increment(10, actionData);
-        this.state.combo.activate(this.waxingSlice, actionData);
-        this.state.gcd.set(actionData.gcdRecastTime!, actionData);
-        this.state.actionLock.reset(actionData);
+        this.totalPotency.increment(actionData.potency!, actionData);
+        this.soulGauge.increment(10, actionData);
+        this.combo.activate(this.waxingSlice, actionData);
+        this.gcd.set(actionData.gcdRecastTime!, actionData);
+        this.actionLock.reset(actionData);
       },
     };
 
     if (!isComboed) {
       actionData.warnings.push(
-        this.state.combo.isActive() ? Warnings.COMBO_BROKEN : Warnings.COMBO_INACTIVE
+        this.combo.isActive() ? Warnings.COMBO_BROKEN : Warnings.COMBO_INACTIVE
       );
     }
 
@@ -153,7 +102,7 @@ export default class Reaper extends Player {
   }
 
   waxingSlice(): ActionData {
-    const isComboed = this.state.combo.nextAction === this.waxingSlice;
+    const isComboed = this.combo.nextAction === this.waxingSlice;
 
     const actionData: ActionData = {
       type: 'gcd',
@@ -162,17 +111,17 @@ export default class Reaper extends Player {
       warnings: [],
       beginEffects: () => {},
       finishEffects: () => {
-        this.state.totalPotency.increment(actionData.potency!, actionData);
-        this.state.soulGauge.increment(isComboed ? 10 : 0, actionData);
-        this.state.combo.activate(isComboed ? this.infernalSlice : this.slice, actionData);
-        this.state.gcd.set(actionData.gcdRecastTime!, actionData);
-        this.state.actionLock.reset(actionData);
+        this.totalPotency.increment(actionData.potency!, actionData);
+        this.soulGauge.increment(isComboed ? 10 : 0, actionData);
+        this.combo.activate(isComboed ? this.infernalSlice : this.slice, actionData);
+        this.gcd.set(actionData.gcdRecastTime!, actionData);
+        this.actionLock.reset(actionData);
       },
     };
 
     if (!isComboed) {
       actionData.warnings.push(
-        this.state.combo.isActive() ? Warnings.COMBO_BROKEN : Warnings.COMBO_INACTIVE
+        this.combo.isActive() ? Warnings.COMBO_BROKEN : Warnings.COMBO_INACTIVE
       );
     }
 
@@ -180,7 +129,7 @@ export default class Reaper extends Player {
   }
 
   infernalSlice(): ActionData {
-    const isComboed = this.state.combo.nextAction === this.infernalSlice;
+    const isComboed = this.combo.nextAction === this.infernalSlice;
 
     const actionData: ActionData = {
       type: 'gcd',
@@ -189,11 +138,11 @@ export default class Reaper extends Player {
       warnings: [],
       beginEffects: () => {},
       finishEffects: () => {
-        this.state.totalPotency.increment(actionData.potency!, actionData);
-        this.state.soulGauge.increment(isComboed ? 10 : 0, actionData);
-        this.state.combo.reset(actionData);
-        this.state.gcd.set(actionData.gcdRecastTime!, actionData);
-        this.state.actionLock.reset(actionData);
+        this.totalPotency.increment(actionData.potency!, actionData);
+        this.soulGauge.increment(isComboed ? 10 : 0, actionData);
+        this.combo.reset(actionData);
+        this.gcd.set(actionData.gcdRecastTime!, actionData);
+        this.actionLock.reset(actionData);
       },
     };
 
@@ -212,10 +161,10 @@ export default class Reaper extends Player {
       warnings: [],
       beginEffects: () => {},
       finishEffects: () => {
-        this.state.deathsDesign.increment(30, actionData);
-        this.state.totalPotency.increment(actionData.potency!, actionData);
-        this.state.gcd.set(actionData.gcdRecastTime!, actionData);
-        this.state.actionLock.reset(actionData);
+        this.deathsDesign.increment(30, actionData);
+        this.totalPotency.increment(actionData.potency!, actionData);
+        this.gcd.set(actionData.gcdRecastTime!, actionData);
+        this.actionLock.reset(actionData);
       },
     };
     return actionData;

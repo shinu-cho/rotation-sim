@@ -1,10 +1,10 @@
 /* eslint-disable no-console */
 import React from 'react';
 import './App.css';
-import Reaper from './Reaper';
+import { Reaper } from './Reaper';
 import { RotationManager } from './RotationManager';
 
-const rotationManager = new RotationManager();
+const rotationManager = new RotationManager(() => new Reaper());
 
 rotationManager.addActions(0, [
   { action: Reaper.prototype.shadowOfDeath },
@@ -25,6 +25,9 @@ console.log(rotationManager.actionSequence);
 
 rotationManager.removeActions(rotationManager.actionSequence.slice(4, 6));
 console.log(rotationManager.actionSequence);
+
+const testReaper = new Reaper();
+console.log({ ...testReaper });
 
 function App() {
   return <> </>;

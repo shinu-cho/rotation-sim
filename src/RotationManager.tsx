@@ -1,7 +1,7 @@
 /* eslint-disable max-classes-per-file */
 import { DataSet, DataView } from 'vis-data';
 import { Action, ActionData } from './ActionData';
-import Reaper from './Reaper';
+import { Player, PlayerState } from './Player';
 
 export interface TimelineActionData {
   id: number;
@@ -11,15 +11,17 @@ export interface TimelineActionData {
   data?: ActionData;
 }
 
-export class RotationManager {
+export class RotationManager<TPlayer extends Player, TState extends PlayerState> {
   #actionItems: DataSet<TimelineActionData>;
   #actionSequence: Array<TimelineActionData>;
   #actionIdCounter: number;
+  #playerFactory: (data?: TState) => TPlayer;
 
-  constructor() {
+  constructor(playerFactory: (data?: TState) => TPlayer) {
     this.#actionItems = new DataSet<TimelineActionData>({ queue: {} });
     this.#actionSequence = [];
     this.#actionIdCounter = 0;
+    this.#playerFactory = playerFactory;
   }
 
   addActions(
@@ -77,19 +79,22 @@ export class RotationManager {
   }
 
   private simulate() {
-    const player = new Reaper();
+    const player = this.#playerFactory(undefined);
+    let clock = 0;
     this.#actionSequence.forEach((item) => {
-      item.time = player.clock;
+      item.time = clock;
       item.data = player.execute(item.action);
 
       let nextExpireAction = player.getNextExpireAction();
-      while (nextExpireAction && nextExpireAction.delta <= player.state.gcd.value) {
+      while (nextExpireAction && nextExpireAction.delta <= player.gcd.value) {
+        clock += nextExpireAction.delta;
         player.stepTime(nextExpireAction.delta);
         player.execute(nextExpireAction.action);
         nextExpireAction = player.getNextExpireAction();
       }
 
-      player.stepTime(player.state.gcd.value);
+      clock += player.gcd.value;
+      player.stepTime(player.gcd.value);
     });
   }
 
