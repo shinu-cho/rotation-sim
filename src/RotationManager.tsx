@@ -11,21 +11,6 @@ export interface TimelineActionData {
   data?: ActionData;
 }
 
-export abstract class AbstractRotationManager {
-  // #actionItems: TimelineActionData[];
-
-  abstract addActions(actions: Action[], time: number): void;
-  abstract removeActions(actions: TimelineActionData[]): void;
-  abstract moveActions(actions: TimelineActionData[], time: number): void;
-  abstract getClosestSnapPoint(
-    time: number,
-    type: 'gcd' | 'ogcd',
-    ignoreBlock: TimelineActionData[]
-  ): number;
-
-  abstract get actionItems(): DataSet<TimelineActionData>;
-}
-
 export class RotationManager {
   #actionItems: DataSet<TimelineActionData>;
   #actionSequence: Array<TimelineActionData>;
@@ -37,13 +22,11 @@ export class RotationManager {
     this.#actionIdCounter = 0;
   }
 
-  updateDataSet() {
-    this.simulate();
-    this.#actionItems.flush!();
-    this.#actionItems.updateOnly(this.#actionSequence);
-  }
-
-  addActions(insertTime: number, actions: Partial<TimelineActionData>[], simulate: boolean = true) {
+  addActions(
+    insertTime: number,
+    actions: Partial<TimelineActionData>[],
+    updateRotation: boolean = true
+  ) {
     const newItems = actions.map(
       (action) => ({ ...action, id: this.getUniqueId(), time: 0 } as TimelineActionData)
     );
@@ -56,12 +39,12 @@ export class RotationManager {
     ];
 
     this.#actionItems.add(newItems);
-    if (simulate) {
-      this.updateDataSet();
+    if (updateRotation) {
+      this.updateRotation();
     }
   }
 
-  removeActions(actions: TimelineActionData[], simulate: boolean = true) {
+  removeActions(actions: TimelineActionData[], updateRotation: boolean = true) {
     if (actions.length === 0) {
       return;
     }
@@ -73,18 +56,24 @@ export class RotationManager {
     ];
 
     this.#actionItems.remove(actions);
-    if (simulate) {
-      this.updateDataSet();
+    if (updateRotation) {
+      this.updateRotation();
     }
   }
 
-  moveActions(insertTime: number, actions: TimelineActionData[], simulate: boolean = true) {
+  moveActions(insertTime: number, actions: TimelineActionData[], updateRotation: boolean = true) {
     this.removeActions(actions, false);
     this.addActions(insertTime, actions, false);
 
-    if (simulate) {
-      this.updateDataSet();
+    if (updateRotation) {
+      this.updateRotation();
     }
+  }
+
+  private updateRotation() {
+    this.simulate();
+    this.#actionItems.flush!();
+    this.#actionItems.updateOnly(this.#actionSequence);
   }
 
   private simulate() {
@@ -104,7 +93,6 @@ export class RotationManager {
     });
   }
 
-  // first index at which item.time >= t
   private getNextIndexAtTime(time: number) {
     for (let index = 0; index < this.#actionItems.length; index += 1) {
       if (this.#actionSequence[index].time >= time) {

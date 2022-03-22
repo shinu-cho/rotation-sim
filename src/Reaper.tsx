@@ -1,3 +1,6 @@
+/* eslint-disable max-classes-per-file */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+
 import Combo from './Combo';
 import Gauge from './Gauge';
 import Timer from './Timer';
@@ -5,32 +8,49 @@ import { Action, ActionData } from './ActionData';
 import { Constants, Warnings } from './Constants';
 import StatusEffect from './StatusEffect';
 
-export default class Reaper {
+type BaseState = {
+  gcd: Timer;
+  actionLock: Timer;
+};
+
+type ReaperState = BaseState & {
+  totalPotency: Gauge;
+  soulGauge: Gauge;
+  shroudGauge: Gauge;
+  combo: Combo;
+  deathsDesign: StatusEffect;
+};
+
+class Player {
+  clock: number = 0;
+  state: BaseState = {
+    gcd: new Timer(0),
+    actionLock: new Timer(0, Constants.ACTION_RECAST_LOCK),
+  };
+}
+
+export default class Reaper extends Player {
   static Warnings = {
     DEATHS_DESIGN_EXPIRED: "Death's design expired",
   };
 
-  clock: number;
-
-  state: {
-    totalPotency: Gauge;
-    soulGauge: Gauge;
-    shroudGauge: Gauge;
-    combo: Combo;
-    deathsDesign: StatusEffect;
-    gcd: Timer;
-  };
+  declare state: ReaperState;
 
   constructor() {
-    this.state = {
-      totalPotency: new Gauge(),
-      soulGauge: new Gauge(0, 0, 20),
-      shroudGauge: new Gauge(0, 0, 100),
-      combo: new Combo(this.slice, this.expireCombo),
-      deathsDesign: new StatusEffect(Reaper.deathsDesignMutator, 0, 60, this.expireDeathsDesign),
-      gcd: new Timer(0),
-    };
-    this.clock = 0;
+    super();
+
+    this.state.totalPotency = new Gauge();
+    this.state.soulGauge = new Gauge(0, 0, 20);
+    this.state.shroudGauge = new Gauge(0, 0, 100);
+    this.state.combo = new Combo(this.slice, this.expireCombo);
+    this.state.deathsDesign = new StatusEffect(
+      Reaper.deathsDesignMutator,
+      0,
+      60,
+      this.expireDeathsDesign
+    );
+
+    console.table(this.state);
   }
 
   stepTime(delta: number) {
@@ -119,6 +139,7 @@ export default class Reaper {
         this.state.soulGauge.increment(10, actionData);
         this.state.combo.activate(this.waxingSlice, actionData);
         this.state.gcd.set(actionData.gcdRecastTime!, actionData);
+        this.state.actionLock.reset(actionData);
       },
     };
 
@@ -145,6 +166,7 @@ export default class Reaper {
         this.state.soulGauge.increment(isComboed ? 10 : 0, actionData);
         this.state.combo.activate(isComboed ? this.infernalSlice : this.slice, actionData);
         this.state.gcd.set(actionData.gcdRecastTime!, actionData);
+        this.state.actionLock.reset(actionData);
       },
     };
 
@@ -171,6 +193,7 @@ export default class Reaper {
         this.state.soulGauge.increment(isComboed ? 10 : 0, actionData);
         this.state.combo.reset(actionData);
         this.state.gcd.set(actionData.gcdRecastTime!, actionData);
+        this.state.actionLock.reset(actionData);
       },
     };
 
@@ -192,6 +215,7 @@ export default class Reaper {
         this.state.deathsDesign.increment(30, actionData);
         this.state.totalPotency.increment(actionData.potency!, actionData);
         this.state.gcd.set(actionData.gcdRecastTime!, actionData);
+        this.state.actionLock.reset(actionData);
       },
     };
     return actionData;
